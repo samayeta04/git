@@ -1,66 +1,60 @@
-[![Build status](https://github.com/git/git/workflows/CI/PR/badge.svg)](https://github.com/git/git/actions?query=branch%3Amaster+event%3Apush)
+# LaunchX Selenium Automation (Python + pytest)
 
-Git - fast, scalable, distributed revision control system
-=========================================================
+Tests the sign-in page at https://launchx.inquocv.com/launchx-app.
+User IDs (e-mails) and passwords are read from `test_data/users.xlsx`.
 
-Git is a fast, scalable, distributed revision control system with an
-unusually rich command set that provides both high-level operations
-and full access to internals.
+## Setup
+```bash
+pip install -r requirements.txt
+```
+Chrome (or Firefox/Edge) must be installed. Selenium Manager downloads the driver automatically.
 
-Git is an Open Source project covered by the GNU General Public
-License version 2 (some parts of it are under different licenses,
-compatible with the GPLv2). It was originally written by Linus
-Torvalds with help of a group of hackers around the net.
+## Fill in the Excel file
+`test_data/users.xlsx` → sheet **Users**
 
-Please read the file [INSTALL][] for installation instructions.
+| TestID | Email | Password | Expected | Description |
+|---|---|---|---|---|
+| U001 | real.user@college.edu | ******** | valid | Valid student |
+| U003 | nobody@example.com | Wrong@123 | invalid | Unregistered |
 
-Many Git online resources are accessible from <https://git-scm.com/>
-including full documentation and Git related tools.
+- `Expected = valid` → login must succeed; `invalid` → login must be rejected.
+- Rows whose values still start with `REPLACE_` are skipped automatically.
+- Each row becomes its own test case.
 
-See [Documentation/gittutorial.txt][] to get started, then see
-[Documentation/giteveryday.txt][] for a useful minimum set of commands, and
-`Documentation/git-<commandname>.txt` for documentation of each command.
-If git has been correctly installed, then the tutorial can also be
-read with `man gittutorial` or `git help tutorial`, and the
-documentation of each command with `man git-<commandname>` or `git help
-<commandname>`.
+## Run
+```bash
+pytest                          # everything, HTML report in reports/report.html
+pytest -m smoke                 # quick sanity only
+pytest -m datadriven            # only Excel-driven tests
+pytest -m "negative or security"
+HEADLESS=true pytest            # no browser window
+BROWSER=firefox pytest          # chrome | firefox | edge
+USERS_XLSX=path/to/other.xlsx pytest
+```
+Failure screenshots go to `reports/screenshots/`.
 
-CVS users may also want to read [Documentation/gitcvs-migration.txt][]
-(`man gitcvs-migration` or `git help cvs-migration` if git is
-installed).
+## Scenarios covered (≈70 test cases)
+| Group | IDs | What is checked |
+|---|---|---|
+| Page load / UI | TC001–TC015 | title, heading, logo, fields, button, invite-only note, no sign-up link, language selector, masked password, tab order, refresh, show/hide toggle |
+| Negative | TC020–TC031 | empty fields, bad e-mail formats, unregistered user, whitespace, long input, special chars, unicode, error message, no password in URL, repeated failures |
+| Security | TC040–TC043 | SQL-injection strings, XSS payloads, HTTPS, direct access to inner route |
+| Responsive | TC050 | mobile / tablet / desktop usability, no horizontal scroll |
+| Excel-driven | TC060–TC070 | valid login, Enter-key login, session after refresh, wrong password, e-mail case, logout, back button after logout, invalid users |
 
-The user discussion and development of Git take place on the Git
-mailing list -- everyone is welcome to post bug reports, feature
-requests, comments and patches to git@vger.kernel.org (read
-[Documentation/SubmittingPatches][] for instructions on patch submission).
-To subscribe to the list, send an email with just "subscribe git" in
-the body to majordomo@vger.kernel.org. The mailing list archives are
-available at <https://lore.kernel.org/git/>,
-<http://marc.info/?l=git> and other archival sites.
+## Adjusting locators
+The sign-in page is rendered client-side, so each element uses a list of fallback locators in
+`pages/login_page.py`. If a test fails with "None of the locators matched", open DevTools, inspect the
+element, and add its id/name/CSS to the matching list (EMAIL, PASSWORD, SIGN_IN_BTN, LOGOUT, ERROR …).
+Post-login tests treat "sign-in form disappears" as success; add a dashboard-specific check in
+`wait_for_login_success()` once you know what the landing page shows.
 
-Issues which are security relevant should be disclosed privately to
-the Git Security mailing list <git-security@googlegroups.com>.
-
-The maintainer frequently sends the "What's cooking" reports that
-list the current status of various development topics to the mailing
-list.  The discussion following them give a good reference for
-project status, development direction and remaining tasks.
-
-The name "git" was given by Linus Torvalds when he wrote the very
-first version. He described the tool as "the stupid content tracker"
-and the name as (depending on your mood):
-
- - random three-letter combination that is pronounceable, and not
-   actually used by any common UNIX command.  The fact that it is a
-   mispronunciation of "get" may or may not be relevant.
- - stupid. contemptible and despicable. simple. Take your pick from the
-   dictionary of slang.
- - "global information tracker": you're in a good mood, and it actually
-   works for you. Angels sing, and a light suddenly fills the room.
- - "goddamn idiotic truckload of sh*t": when it breaks
-
-[INSTALL]: INSTALL
-[Documentation/gittutorial.txt]: Documentation/gittutorial.txt
-[Documentation/giteveryday.txt]: Documentation/giteveryday.txt
-[Documentation/gitcvs-migration.txt]: Documentation/gitcvs-migration.txt
-[Documentation/SubmittingPatches]: Documentation/SubmittingPatches
+## Project layout
+```
+config.py              URL, browser, timeouts, viewports
+pages/                 Page objects (BasePage, LoginPage)
+utils/                 driver_factory, excel_reader
+tests/                 conftest.py (fixtures, screenshot-on-fail), test_login.py
+test_data/users.xlsx   User IDs / passwords
+reports/               HTML report + screenshots
+```
